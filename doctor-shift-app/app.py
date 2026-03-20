@@ -102,25 +102,41 @@ def export_all_constraints_csv():
     df.to_csv(buf, index=False, encoding="utf-8-sig")
     return buf.getvalue()
 
+def safe_int(val, default):
+    """NaN・空白・変換不能な値を安全にintに変換"""
+    try:
+        if pd.isna(val):
+            return default
+    except Exception:
+        pass
+    try:
+        return int(float(str(val).strip()))
+    except Exception:
+        return default
+
 def import_all_constraints_csv(uploaded_file):
-    df = pd.read_csv(uploaded_file)
+    df = pd.read_csv(uploaded_file, encoding="utf-8-sig")
+    # BOMなしUTF-8も試みる
+    if "医師名" not in df.columns:
+        uploaded_file.seek(0)
+        df = pd.read_csv(uploaded_file, encoding="utf-8")
     new_doctors = []
     for _, row in df.iterrows():
-        doc = str(row["医師名"]).strip()
-        if not doc:
+        doc = str(row.get("医師名", "")).strip()
+        if not doc or doc == "nan":
             continue
         new_doctors.append(doc)
         st.session_state.constraints[doc] = {
-            "priority":      int(row.get("優先度", 5)),
-            "month_min":     int(row.get("月間最小回数", 0)),
-            "month_max":     int(row.get("月間最大回数", 20)),
-            "min_gap":       int(row.get("最低空ける日数", 1)),
-            "wish_priority": int(row.get("希望日優先度", 3)),
+            "priority":      safe_int(row.get("優先度"), 5),
+            "month_min":     safe_int(row.get("月間最小回数"), 0),
+            "month_max":     safe_int(row.get("月間最大回数"), 20),
+            "min_gap":       safe_int(row.get("最低空ける日数"), 1),
+            "wish_priority": safe_int(row.get("希望日優先度"), 3),
             "ng_days":       parse_day_list(row.get("NG日(カンマ区切り)", "")),
             "wish_days":     parse_day_list(row.get("希望日(カンマ区切り)", "")),
         }
         st.session_state.doctor_limits[doc] = {
-            s: int(row.get(f"{s}_上限", 5)) for s in ALL_SHIFTS
+            s: safe_int(row.get(f"{s}_上限"), 5) for s in ALL_SHIFTS
         }
     for doc in new_doctors:
         if doc not in st.session_state.doctors:
@@ -277,15 +293,15 @@ if menu == "📋 医師条件 CSV入出力":
                     if not doc: continue
                     st.session_state.doctors.append(doc)
                     st.session_state.constraints[doc] = {
-                        "priority":      int(row["優先度"]),
-                        "month_min":     int(row["月間最小"]),
-                        "month_max":     int(row["月間最大"]),
-                        "min_gap":       int(row["最低空け日数"]),
-                        "wish_priority": int(row["希望日優先度"]),
+                        "priority":      safe_int(row["優先度"], 5),
+                        "month_min":     safe_int(row["月間最小"], 0),
+                        "month_max":     safe_int(row["月間最大"], 20),
+                        "min_gap":       safe_int(row["最低空け日数"], 1),
+                        "wish_priority": safe_int(row["希望日優先度"], 3),
                         "ng_days":       parse_day_list(row["NG日"]),
                         "wish_days":     parse_day_list(row["希望日"]),
                     }
-                    st.session_state.doctor_limits[doc] = {s: int(row[f"{s}上限"]) for s in ALL_SHIFTS}
+                    st.session_state.doctor_limits[doc] = {s: safe_int(row[f"{s}上限"], 5) for s in ALL_SHIFTS}
                 st.success("✅ 保存しました！")
                 st.rerun()
         with col_dl:

@@ -64,10 +64,20 @@ def day_label(d):
     mark = f"({holiday})" if holiday else ""
     return f"{d.month}/{d.day}({w}){mark}"
 
-def parse_date_list(val):
+def parse_day_list(val):
+    """カンマ区切りの「日」だけ（例: '5,12,20'）を整数リストに変換"""
     if pd.isna(val) or str(val).strip() == "":
         return []
-    return [s.strip() for s in str(val).split(",") if s.strip()]
+    result = []
+    for s in str(val).split(","):
+        s = s.strip()
+        if s.isdigit():
+            result.append(int(s))
+    return result
+
+def days_to_dates(day_list, year, month):
+    _, n = calendar.monthrange(year, month)
+    return [date(year, month, d) for d in day_list if 1 <= d <= n]
 
 def export_all_constraints_csv():
     rows = []
@@ -81,8 +91,8 @@ def export_all_constraints_csv():
             "月間最大回数": c.get("month_max", 20),
             "最低空ける日数": c.get("min_gap", 1),
             "希望日優先度": c.get("wish_priority", 3),
-            "NG日(カンマ区切り)": ",".join(c.get("ng_days", [])),
-            "希望日(カンマ区切り)": ",".join(c.get("wish_days", [])),
+            "NG日(カンマ区切り)": ",".join(str(x) for x in c.get("ng_days", [])),
+            "希望日(カンマ区切り)": ",".join(str(x) for x in c.get("wish_days", [])),
         }
         for s in ALL_SHIFTS:
             row[f"{s}_上限"] = lim.get(s, 5)
@@ -106,8 +116,8 @@ def import_all_constraints_csv(uploaded_file):
             "month_max":     int(row.get("月間最大回数", 20)),
             "min_gap":       int(row.get("最低空ける日数", 1)),
             "wish_priority": int(row.get("希望日優先度", 3)),
-            "ng_days":       parse_date_list(row.get("NG日(カンマ区切り)", "")),
-            "wish_days":     parse_date_list(row.get("希望日(カンマ区切り)", "")),
+            "ng_days":       parse_day_list(row.get("NG日(カンマ区切り)", "")),
+            "wish_days":     parse_day_list(row.get("希望日(カンマ区切り)", "")),
         }
         st.session_state.doctor_limits[doc] = {
             s: int(row.get(f"{s}_上限", 5)) for s in ALL_SHIFTS
@@ -125,8 +135,8 @@ def make_template_csv():
         "月間最大回数": [10, 8],
         "最低空ける日数": [1, 2],
         "希望日優先度": [3, 4],
-        "NG日(カンマ区切り)": ["2026-04-05,2026-04-12", "2026-04-20"],
-        "希望日(カンマ区切り)": ["2026-04-15", "2026-04-10,2026-04-17"],
+        "NG日(カンマ区切り)": ["5,12", "20"],
+        "希望日(カンマ区切り)": ["15", "10,17"],
     }
     for s in ALL_SHIFTS:
         sample[f"{s}_上限"] = [5, 4]
@@ -160,8 +170,8 @@ def generate_shifts(year, month, doctors, doctor_limits, constraints, fixed_shif
             candidates = []
             for doc in doctors:
                 c         = constraints.get(doc, {})
-                ng_days   = [date.fromisoformat(x) for x in c.get("ng_days", []) if x]
-                wish_days = [date.fromisoformat(x) for x in c.get("wish_days", []) if x]
+                ng_days   = days_to_dates(c.get("ng_days", []), year, month)
+                wish_days = days_to_dates(c.get("wish_days", []), year, month)
                 min_gap   = c.get("min_gap", 1)
                 month_max = c.get("month_max", 99)
                 priority  = c.get("priority", 5)
@@ -202,7 +212,7 @@ if menu == "📋 医師条件 CSV入出力":
     st.markdown('<div class="main-header"><h2>📋 医師条件 CSV入出力</h2><p>全医師の条件をCSVで一括管理します</p></div>', unsafe_allow_html=True)
 
     st.subheader("① テンプレートCSVをダウンロード")
-    st.markdown('<div class="hint-box">テンプレートをダウンロードしてExcelなどで記入してください。<br>日付は <b>YYYY-MM-DD</b> 形式（例: 2026-04-05）、複数はカンマ区切りです。</div>', unsafe_allow_html=True)
+    st.markdown('<div class="hint-box">テンプレートをダウンロードしてExcelなどで記入してください。<br>NG日・希望日は <b>日だけ</b> を入力してください（例: <b>5,12,20</b>）。年月は不要です。</div>', unsafe_allow_html=True)
     st.download_button("⬇️ テンプレートCSVダウンロード", make_template_csv(),
                        "doctors_template.csv", "text/csv", use_container_width=True)
 
@@ -234,8 +244,8 @@ if menu == "📋 医師条件 CSV入出力":
                 "月間最大":       c.get("month_max", 20),
                 "最低空け日数":   c.get("min_gap", 1),
                 "希望日優先度":   c.get("wish_priority", 3),
-                "NG日":           ",".join(c.get("ng_days", [])),
-                "希望日":         ",".join(c.get("wish_days", [])),
+                "NG日":           ",".join(str(x) for x in c.get("ng_days", [])),
+                "希望日":         ",".join(str(x) for x in c.get("wish_days", [])),
             }
             for s in ALL_SHIFTS:
                 row[f"{s}上限"] = lim.get(s, 5)
@@ -249,8 +259,8 @@ if menu == "📋 医師条件 CSV入出力":
             "月間最大":     st.column_config.NumberColumn("月間最大", min_value=0, max_value=31, step=1),
             "最低空け日数": st.column_config.NumberColumn("最低空け日数", min_value=1, max_value=14, step=1),
             "希望日優先度": st.column_config.NumberColumn("希望日優先度", min_value=1, max_value=5, step=1),
-            "NG日":         st.column_config.TextColumn("NG日（YYYY-MM-DD,...）", width="large"),
-            "希望日":       st.column_config.TextColumn("希望日（YYYY-MM-DD,...）", width="large"),
+            "NG日":         st.column_config.TextColumn("NG日（日のみ: 5,12,20）", width="medium"),
+            "希望日":       st.column_config.TextColumn("希望日（日のみ: 10,17）", width="medium"),
         }
         for s in ALL_SHIFTS:
             col_config[f"{s}上限"] = st.column_config.NumberColumn(f"{s}上限", min_value=0, max_value=31, step=1)
@@ -272,8 +282,8 @@ if menu == "📋 医師条件 CSV入出力":
                         "month_max":     int(row["月間最大"]),
                         "min_gap":       int(row["最低空け日数"]),
                         "wish_priority": int(row["希望日優先度"]),
-                        "ng_days":       parse_date_list(row["NG日"]),
-                        "wish_days":     parse_date_list(row["希望日"]),
+                        "ng_days":       parse_day_list(row["NG日"]),
+                        "wish_days":     parse_day_list(row["希望日"]),
                     }
                     st.session_state.doctor_limits[doc] = {s: int(row[f"{s}上限"]) for s in ALL_SHIFTS}
                 st.success("✅ 保存しました！")
@@ -333,10 +343,10 @@ elif menu == "👨‍⚕️ 医師設定（個別編集）":
                     _, n = calendar.monthrange(year, month)
                     all_days = [date(year, month, d) for d in range(1, n+1)]
                     ng_days_sel = st.multiselect("NG日", all_days,
-                        default=[date.fromisoformat(x) for x in c.get("ng_days", []) if x and date.fromisoformat(x) in all_days],
+                        default=[d for d in days_to_dates(c.get("ng_days", []), year, month) if d in all_days],
                         format_func=day_label, key=f"ng_{sel_doc}")
                     wish_days_sel = st.multiselect("希望日", all_days,
-                        default=[date.fromisoformat(x) for x in c.get("wish_days", []) if x and date.fromisoformat(x) in all_days],
+                        default=[d for d in days_to_dates(c.get("wish_days", []), year, month) if d in all_days],
                         format_func=day_label, key=f"wish_{sel_doc}")
             with tab2:
                 st.markdown("シフト種別ごとの月間上限回数を設定します。")
@@ -350,8 +360,8 @@ elif menu == "👨‍⚕️ 医師設定（個別編集）":
                 st.session_state.constraints[sel_doc] = {
                     "priority": priority, "month_min": month_min, "month_max": month_max,
                     "min_gap": min_gap, "wish_priority": wish_priority,
-                    "ng_days":   [str(d) for d in ng_days_sel],
-                    "wish_days": [str(d) for d in wish_days_sel],
+                    "ng_days":   [d.day for d in ng_days_sel],
+                    "wish_days": [d.day for d in wish_days_sel],
                 }
                 st.session_state.doctor_limits[sel_doc] = shift_limits
                 st.success("✅ 保存しました")

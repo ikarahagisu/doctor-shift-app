@@ -88,8 +88,8 @@ def export_all_constraints_csv():
             row[f"{s}_上限"] = lim.get(s, 5)
         rows.append(row)
     df = pd.DataFrame(rows)
-    buf = io.StringIO()
-    df.to_csv(buf, index=False)
+    buf = io.BytesIO()
+    df.to_csv(buf, index=False, encoding="utf-8-sig")
     return buf.getvalue()
 
 def import_all_constraints_csv(uploaded_file):
@@ -131,8 +131,8 @@ def make_template_csv():
     for s in ALL_SHIFTS:
         sample[f"{s}_上限"] = [5, 4]
     df = pd.DataFrame(sample)
-    buf = io.StringIO()
-    df.to_csv(buf, index=False)
+    buf = io.BytesIO()
+    df.to_csv(buf, index=False, encoding="utf-8-sig")
     return buf.getvalue()
 
 def generate_shifts(year, month, doctors, doctor_limits, constraints, fixed_shifts):
@@ -438,8 +438,8 @@ elif menu == "📅 シフト生成・表示":
             rows.append(row)
         df = pd.DataFrame(rows)
         st.dataframe(df, use_container_width=True, hide_index=True, height=600)
-        buf = io.StringIO()
-        df.to_csv(buf, index=False)
+        buf = io.BytesIO()
+        df.to_csv(buf, index=False, encoding="utf-8-sig")
         st.download_button("⬇️ シフト表CSVダウンロード", buf.getvalue(),
                            f"shift_{year}_{month:02d}.csv", "text/csv")
 
